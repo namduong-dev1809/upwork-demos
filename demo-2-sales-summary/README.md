@@ -30,7 +30,7 @@ Built with Google Apps Script (no paid tools, no servers).
 2. Set the spreadsheet timezone to **Asia/Ho_Chi_Minh** in File → Settings. Enter real date cells or date-only text such as `2026-11-20`. Timestamp text must include an explicit offset, such as `2026-11-20T18:00:00+07:00`.
 3. Add sales rows, for example `2026-11-20 | ORD-001 | Ann Lee | Widget | 3 | 19.99 | 59.97`. Use the same order ID for multiple product lines belonging to one order. Enter numeric prices without currency symbols.
 4. Open Extensions → Apps Script. Copy in `Summary.js` and `Main.js`. In Project Settings enable “Show appsscript.json” and paste the manifest.
-5. Replace `CONFIG.RECIPIENTS` with your email addresses. Set `CURRENCY` to the symbol for your sheet's currency. Leave `SEND_WHEN_EMPTY: true` unless empty days should be suppressed.
+5. Replace `CONFIG.RECIPIENTS` with your email addresses. Set `CURRENCY` to the symbol for your sheet's currency. For a Vietnamese email with VND formatting (`105.000 ₫`, dates `20/11/2026`), set `LANG: 'vi'` and `CURRENCY: '₫'`. Leave `SEND_WHEN_EMPTY: true` unless empty days should be suppressed.
 6. Run **setup** once and approve the permissions. It validates the headers and recipients, removes this account's existing `sendSummaryNow` triggers, and installs one daily trigger near 19:00 Vietnam time.
 7. Run **sendSummaryNow** for a test email. Reload the Sheet to see the **Sales summary** menu. Add sales dated seven days earlier to demonstrate the comparison.
 

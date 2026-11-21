@@ -193,3 +193,20 @@ test('bad headers or recipients fail before setup changes triggers', () => {
   assert.throws(() => g.context.setup(), /Sales headers/);
   assert.equal(g.deleted.length, 0);
 });
+
+test('Vietnamese email uses VND grouping, dd/mm/yyyy dates and comma percent', () => {
+  const s = sales.buildSummary([
+    row('Cà phê sữa', 3, 25000), row('Bạc xỉu', 1, 30000, today, 'B'),
+    row('Cà phê sữa', 2, 25000, '2026-11-13'),
+  ], today);
+  const m = sales.renderSummary(s, true, '₫', 'vi');
+  assert.equal(m.subject, 'Báo cáo bán hàng ngày 20/11/2026');
+  assert.match(m.body, /Doanh thu: 105\.000 ₫/);
+  assert.match(m.body, /Doanh thu ngày 13\/11\/2026: 50\.000 ₫/);
+  assert.match(m.body, /\+55\.000 ₫ \(\+110,00%\)/);
+  assert.match(m.body, /Top 3 món theo doanh thu:\nCà phê sữa: 75\.000 ₫/);
+  assert.match(sales.renderSummary(sales.buildSummary([], today), true, undefined, 'vi').subject,
+    /^Hôm nay chưa có đơn: 20\/11\/2026$/);
+  const loss = sales.buildSummary([row('A', 1, 1000), row('A', 1, 1234567, '2026-11-13')], today);
+  assert.match(sales.renderSummary(loss, true, undefined, 'vi').body, /-1\.233\.567 ₫/);
+});

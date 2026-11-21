@@ -94,39 +94,67 @@ function escapeHtml_(value) {
   });
 }
 
-function money_(cents, currency) {
-  return currency + (cents / 100).toFixed(2);
+var LABELS_ = {
+  en: {
+    revenue: 'Revenue', orders: 'Orders', units: 'Units sold', revenueOn: 'Revenue on ',
+    change: 'Change vs same weekday last week', skipped: 'Skipped invalid rows (entire sheet)',
+    na: 'N/A: last week was zero', title: 'Sales summary: ', empty: 'No sales today: ',
+    daily: 'Daily sales', top: 'Top 3 products by revenue', product: 'Product',
+  },
+  vi: {
+    revenue: 'Doanh thu', orders: 'Số đơn', units: 'Số món bán ra', revenueOn: 'Doanh thu ngày ',
+    change: 'So với cùng thứ tuần trước', skipped: 'Dòng lỗi bị bỏ qua (toàn sheet)',
+    na: 'không so được: tuần trước bằng 0', title: 'Báo cáo bán hàng ngày ', empty: 'Hôm nay chưa có đơn: ',
+    daily: 'Bán hàng trong ngày', top: 'Top 3 món theo doanh thu', product: 'Món',
+  },
+};
+
+/** en: $1234.50. vi: 1.234.500 ₫ (VND has no minor unit, so whole dong). */
+function money_(cents, currency, lang) {
+  if (lang !== 'vi') return currency + (cents / 100).toFixed(2);
+  var sign = cents < 0 ? '-' : '';
+  var whole = String(Math.round(Math.abs(cents) / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return sign + whole + ' ' + currency;
 }
 
-/** Returns both email bodies, or null when the caller disables empty-day emails. */
-function renderSummary(summary, sendWhenEmpty, currency) {
+function day_(isoDay, lang) {
+  return lang === 'vi' ? isoDay.split('-').reverse().join('/') : isoDay;
+}
+
+/** Returns both email bodies, or null when the caller disables empty-day emails. lang: 'en' (default) or 'vi'. */
+function renderSummary(summary, sendWhenEmpty, currency, lang) {
   if (!summary.orders && !sendWhenEmpty) return null;
-  currency = currency || '$';
-  var change = (summary.changeCents > 0 ? '+' : '') + money_(summary.changeCents, currency);
-  var percent = summary.changePercent === null ? 'N/A: last week was zero' :
+  lang = lang === 'vi' ? 'vi' : 'en';
+  var L = LABELS_[lang];
+  currency = currency || (lang === 'vi' ? '₫' : '$');
+  var money = function (cents) { return money_(cents, currency, lang); };
+  var change = (summary.changeCents > 0 ? '+' : '') + money(summary.changeCents);
+  var percent = summary.changePercent === null ? L.na :
     (summary.changePercent > 0 ? '+' : '') + summary.changePercent.toFixed(2) + '%';
+  if (lang === 'vi') percent = percent.replace('.', ',');
   var metrics = [
-    ['Revenue', money_(summary.revenueCents, currency)],
-    ['Orders', summary.orders],
-    ['Units sold', summary.units],
-    ['Revenue on ' + summary.previousDay, money_(summary.previousRevenueCents, currency)],
-    ['Change vs same weekday last week', change + ' (' + percent + ')'],
-    ['Skipped invalid rows (entire sheet)', summary.skippedRows],
+    [L.revenue, money(summary.revenueCents)],
+    [L.orders, summary.orders],
+    [L.units, summary.units],
+    [L.revenueOn + day_(summary.previousDay, lang), money(summary.previousRevenueCents)],
+    [L.change, change + ' (' + percent + ')'],
+    [L.skipped, summary.skippedRows],
   ];
-  var title = summary.orders ? 'Sales summary: ' + summary.day : 'No sales today: ' + summary.day;
+  var title = (summary.orders ? L.title : L.empty) + day_(summary.day, lang);
   var body = title + '\n\n' + metrics.map(function (r) { return r[0] + ': ' + r[1]; }).join('\n');
-  var html = '<h2>' + escapeHtml_(title) + '</h2><table><caption>Daily sales</caption><tbody>' +
+  var html = '<h2>' + escapeHtml_(title) + '</h2><table><caption>' + escapeHtml_(L.daily) + '</caption><tbody>' +
     metrics.map(function (r) {
       return '<tr><th scope="row">' + escapeHtml_(r[0]) + '</th><td>' + escapeHtml_(r[1]) + '</td></tr>';
     }).join('') + '</tbody></table>';
   if (summary.topProducts.length) {
-    body += '\n\nTop 3 products by revenue:\n' + summary.topProducts.map(function (p) {
-      return p.product + ': ' + money_(p.revenueCents, currency);
+    body += '\n\n' + L.top + ':\n' + summary.topProducts.map(function (p) {
+      return p.product + ': ' + money(p.revenueCents);
     }).join('\n');
-    html += '<table><caption>Top 3 products by revenue</caption><thead><tr><th scope="col">Product</th>' +
-      '<th scope="col">Revenue</th></tr></thead><tbody>' + summary.topProducts.map(function (p) {
+    html += '<table><caption>' + escapeHtml_(L.top) + '</caption><thead><tr><th scope="col">' +
+      escapeHtml_(L.product) + '</th><th scope="col">' + escapeHtml_(L.revenue) + '</th></tr></thead><tbody>' +
+      summary.topProducts.map(function (p) {
         return '<tr><td>' + escapeHtml_(p.product) + '</td><td>' +
-          escapeHtml_(money_(p.revenueCents, currency)) + '</td></tr>';
+          escapeHtml_(money(p.revenueCents)) + '</td></tr>';
       }).join('') + '</tbody></table>';
   }
   return { subject: title, body: body, htmlBody: html };

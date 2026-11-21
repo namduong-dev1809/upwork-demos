@@ -4,6 +4,7 @@ var CONFIG = {
   RECIPIENTS: ['owner@example.com'], // replace before running setup or sending
   SEND_WHEN_EMPTY: true,
   CURRENCY: '$',
+  LANG: 'en', // 'vi' = Vietnamese email, VND format (set CURRENCY: '₫')
 };
 
 /** Installs one daily trigger for this account; repeated setup replaces that handler's triggers. */
@@ -20,7 +21,7 @@ function setup() {
 /** Manual entry point and daily trigger handler. Errors appear in Apps Script Executions. */
 function sendSummaryNow() {
   var summary = buildSummary(readSalesRows_(), new Date());
-  var message = renderSummary(summary, CONFIG.SEND_WHEN_EMPTY, CONFIG.CURRENCY);
+  var message = renderSummary(summary, CONFIG.SEND_WHEN_EMPTY, CONFIG.CURRENCY, CONFIG.LANG);
   if (!message) return;
   message.to = recipients_();
   MailApp.sendEmail(message);
