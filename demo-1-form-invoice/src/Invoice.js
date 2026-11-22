@@ -77,8 +77,9 @@ function formatInvoiceNumber_(sequence, year) {
 }
 
 /** Placeholder → text map for the Google Doc template ({{name}}, {{total}}, ...). dateText is already formatted. */
-function buildReplacements_(invoice, invoiceNumber, dateText, currency) {
+function buildReplacements_(invoice, invoiceNumber, dateText, currency, sellerName) {
   return {
+    '{{seller_name}}': sellerName || '',
     '{{invoice_number}}': invoiceNumber,
     '{{date}}': dateText,
     '{{name}}': invoice.name,
@@ -95,7 +96,7 @@ function buildReplacements_(invoice, invoiceNumber, dateText, currency) {
 /** Starter Doc that setup creates. It uses every placeholder from buildReplacements_. */
 var INVOICE_TEMPLATE = {
   title: 'Invoice {{invoice_number}}',
-  lines: ['Date: {{date}}', 'Bill to: {{name}} ({{email}})'],
+  lines: ['{{seller_name}}', 'Date: {{date}}', 'Bill to: {{name}} ({{email}})'],
   table: [
     ['Product', 'Quantity', 'Unit price', 'Subtotal'],
     ['{{product}}', '{{quantity}}', '{{unit_price}}', '{{subtotal}}'],

@@ -16,7 +16,7 @@ var CONFIG = {
 };
 
 var SETTINGS_HELP = {
-  'Seller name': 'Shown in the email subject and signature.',
+  'Seller name': 'Shown at the top of the invoice and in the email subject and signature.',
   'Tax rate': 'Between 0 and 1. 0.1 means 10%. Use 0 for no tax.',
   'Currency symbol': 'Shown before every amount, e.g. $, €, £.',
   'Responses sheet': 'Optional. Leave blank to use the tab linked to your form.',
@@ -89,7 +89,7 @@ function setup() {
       '\nNew form responses now get an invoice automatically.\n\nNext:\n' +
       '1. Settings tab: check Seller name, Tax rate and Currency symbol.\n' +
       '2. Products tab: enter your products and prices, then Invoices > Refresh form products.\n' +
-      '3. Send yourself a test order: ' + linked.getPublishedUrl());
+      '3. Send yourself a test order: open the link in the "Form URL" row of the Settings tab.');
   });
 }
 
@@ -105,7 +105,7 @@ function onFormSubmit(e) {
     var now = new Date();
     var year = localDate_(now, 'yyyy');
     var number = formatInvoiceNumber_(nextSequence_(year), year);
-    var replacements = buildReplacements_(invoice, number, localDate_(now, 'yyyy-MM-dd'), settings['Currency symbol']);
+    var replacements = buildReplacements_(invoice, number, localDate_(now, 'yyyy-MM-dd'), settings['Currency symbol'], settings['Seller name']);
     var pdf = createPdf_(replacements, number, settings);
     sendEmail_(invoice, number, pdf, settings);
     writeStatus_(sheet, row, cols, [number, pdf.getUrl(), 'SENT', localDate_(now, 'yyyy-MM-dd HH:mm')]);

@@ -46,6 +46,8 @@ test('invoice number and replacements', () => {
   const r = inv.buildReplacements_(inv.computeInvoice_(inv.parseOrder_(form({})), prices, 0.1), 'INV-2026-0007', '2026-11-20', '$');
   assert.equal(r['{{total}}'], '$65.97');
   assert.equal(r['{{date}}'], '2026-11-20');
+  assert.equal(r['{{seller_name}}'], '');
+  assert.equal(inv.buildReplacements_(inv.computeInvoice_(inv.parseOrder_(form({})), prices, 0), 'X', 'd', '$', 'Ann Shop')['{{seller_name}}'], 'Ann Shop');
 });
 
 test('starter template contains every placeholder', () => {
@@ -262,7 +264,7 @@ test('setup builds everything on a blank sheet and is idempotent', () => {
   assert.equal(a.settingsRow('Output folder ID')[1], 'folder1');
   assert.match(a.settingsRow('Tax rate')[2], /0\.1 means 10%/);
   assert.ok(a.docs[0].text.join(' ').includes('{{total}}'));
-  assert.match(a.alerts[0], /Setup finished[\s\S]*https:\/\/forms\/form1\/viewform/);
+  assert.match(a.alerts[0], /Setup finished[\s\S]*"Form URL" row/);
 
   const settings = a.ss.getSheetByName('Settings');
   a.settingsRow('Seller name')[1] = 'Ann Shop';
@@ -328,6 +330,7 @@ test('onFormSubmit sends the invoice with dates in the spreadsheet timezone', ()
   assert.deepEqual([...sheet.data[1].slice(5)], ['INV-2026-0001', 'https://drive/INV-2026-0001.pdf', 'SENT', '2026-12-31 21:00']);
   assert.equal(a.replaced['{{date}}'], '2026-12-31');
   assert.equal(a.replaced['{{total}}'], '$6.60');
+  assert.equal(a.replaced['{{seller_name}}'], 'Ann Shop');
   assert.equal(a.props.invoice_seq_2026, '1');
   assert.equal(a.mails.length, 1);
   assert.equal(a.mails[0].to, 'ann@example.com');
