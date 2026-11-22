@@ -1,21 +1,14 @@
 /** Pure sales-summary logic. Apps Script loads these functions into one global scope. */
 
-/** Vietnam uses UTC+07:00 year-round. Date-only strings represent local sheet dates. */
-function salesDay(date) {
-  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    var parsed = new Date(date + 'T00:00:00Z');
-    return isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date ? date : null;
-  }
-  if (!(date instanceof Date)) {
-    if (typeof date !== 'string' || !/T.*(?:Z|[+-]\d{2}:\d{2})$/i.test(date)) return null;
-    date = new Date(date);
-  }
-  var shifted = new Date(date.getTime() + 7 * 60 * 60 * 1000);
-  return isFinite(shifted.getTime()) ? shifted.toISOString().slice(0, 10) : null;
+/** Accepts only yyyy-MM-dd strings; Main.js formats Date cells in the spreadsheet's timezone first. */
+function salesDay_(date) {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  var parsed = new Date(date + 'T00:00:00Z');
+  return isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date ? date : null;
 }
 
 /** Converts a sheet price to integer cents, matching demo 1's rounding convention. */
-function toCents(price) {
+function toCents_(price) {
   var n = numericCell_(price);
   var cents = Math.round(n * 100);
   if (n < 0 || !Number.isSafeInteger(cents)) throw new Error('Invalid price: ' + price);
@@ -32,8 +25,8 @@ function numericCell_(value) {
 }
 
 /** Rows exclude headers. Total is derived from quantity and price, not the Total column. */
-function buildSummary(rows, today) {
-  var day = salesDay(today);
+function buildSummary_(rows, today) {
+  var day = salesDay_(today);
   if (!day) throw new Error('Invalid summary date');
   var lastWeek = new Date(day + 'T00:00:00Z');
   lastWeek.setUTCDate(lastWeek.getUTCDate() - 7);
@@ -46,14 +39,14 @@ function buildSummary(rows, today) {
   var products = new Map();
 
   rows.forEach(function (row) {
-    var rowDay = salesDay(row[0]);
+    var rowDay = salesDay_(row[0]);
     var orderId = row[1] == null ? '' : String(row[1]).trim();
     var product = row[3] == null ? '' : String(row[3]).trim();
     var quantity;
     var lineCents;
     try {
       quantity = numericCell_(row[4]);
-      lineCents = quantity * toCents(row[5]);
+      lineCents = quantity * toCents_(row[5]);
       if (!rowDay || !orderId || !product || !Number.isSafeInteger(quantity) || quantity < 1 ||
           !Number.isSafeInteger(lineCents)) throw new Error('Invalid sales row');
     } catch (err) {
@@ -121,8 +114,18 @@ function day_(isoDay, lang) {
   return lang === 'vi' ? isoDay.split('-').reverse().join('/') : isoDay;
 }
 
+// Gmail strips <style> blocks, so every table cell carries inline styles.
+var CELL_ = 'border:1px solid #ddd;padding:6px 10px';
+var TH_ = CELL_ + ';background:#f3f4f6;text-align:left';
+var NUM_ = CELL_ + ';text-align:right';
+
+function table_(caption) {
+  return '<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;margin:0 0 16px">' +
+    '<caption style="text-align:left;font-weight:bold;padding:6px 0">' + escapeHtml_(caption) + '</caption>';
+}
+
 /** Returns both email bodies, or null when the caller disables empty-day emails. lang: 'en' (default) or 'vi'. */
-function renderSummary(summary, sendWhenEmpty, currency, lang) {
+function renderSummary_(summary, sendWhenEmpty, currency, lang) {
   if (!summary.orders && !sendWhenEmpty) return null;
   lang = lang === 'vi' ? 'vi' : 'en';
   var L = LABELS_[lang];
@@ -142,24 +145,91 @@ function renderSummary(summary, sendWhenEmpty, currency, lang) {
   ];
   var title = (summary.orders ? L.title : L.empty) + day_(summary.day, lang);
   var body = title + '\n\n' + metrics.map(function (r) { return r[0] + ': ' + r[1]; }).join('\n');
-  var html = '<h2>' + escapeHtml_(title) + '</h2><table><caption>' + escapeHtml_(L.daily) + '</caption><tbody>' +
+  var html = '<h2 style="font-family:Arial,sans-serif">' + escapeHtml_(title) + '</h2>' +
+    table_(L.daily) + '<tbody>' +
     metrics.map(function (r) {
-      return '<tr><th scope="row">' + escapeHtml_(r[0]) + '</th><td>' + escapeHtml_(r[1]) + '</td></tr>';
+      return '<tr><th scope="row" style="' + TH_ + '">' + escapeHtml_(r[0]) + '</th><td style="' + NUM_ + '">' +
+        escapeHtml_(r[1]) + '</td></tr>';
     }).join('') + '</tbody></table>';
   if (summary.topProducts.length) {
     body += '\n\n' + L.top + ':\n' + summary.topProducts.map(function (p) {
       return p.product + ': ' + money(p.revenueCents);
     }).join('\n');
-    html += '<table><caption>' + escapeHtml_(L.top) + '</caption><thead><tr><th scope="col">' +
-      escapeHtml_(L.product) + '</th><th scope="col">' + escapeHtml_(L.revenue) + '</th></tr></thead><tbody>' +
+    html += table_(L.top) + '<thead><tr><th scope="col" style="' + TH_ + '">' +
+      escapeHtml_(L.product) + '</th><th scope="col" style="' + TH_ + ';text-align:right">' +
+      escapeHtml_(L.revenue) + '</th></tr></thead><tbody>' +
       summary.topProducts.map(function (p) {
-        return '<tr><td>' + escapeHtml_(p.product) + '</td><td>' +
+        return '<tr><td style="' + CELL_ + '">' + escapeHtml_(p.product) + '</td><td style="' + NUM_ + '">' +
           escapeHtml_(money(p.revenueCents)) + '</td></tr>';
       }).join('') + '</tbody></table>';
   }
   return { subject: title, body: body, htmlBody: html };
 }
 
+/**
+ * Merges Settings tab rows ([key, value, help]) over defaults. The header row and unknown keys are
+ * ignored because only default keys are read. Blank values keep the default. The default's type
+ * decides coercion: array = list split on commas/newlines, number, boolean, otherwise trimmed string.
+ */
+function parseSettings_(rows, defaults) {
+  var out = {};
+  Object.keys(defaults).forEach(function (key) { out[key] = defaults[key]; });
+  (rows || []).forEach(function (row) {
+    var key = row[0] == null ? '' : String(row[0]).trim();
+    if (!key || !Object.prototype.hasOwnProperty.call(defaults, key)) return;
+    var value = typeof row[1] === 'string' ? row[1].trim() : row[1];
+    if (value === '' || value == null) return;
+    var fallback = defaults[key];
+    var where = 'Settings tab, row "' + key + '": ';
+    if (Array.isArray(fallback)) {
+      out[key] = String(value).split(/[,\n]/).map(function (item) { return item.trim(); }).filter(Boolean);
+    } else if (typeof fallback === 'number') {
+      var n = Number(value);
+      if (typeof value === 'boolean' || !isFinite(n)) throw new Error(where + '"' + value + '" is not a number.');
+      out[key] = n;
+    } else if (typeof fallback === 'boolean') {
+      var text = String(value).toUpperCase();
+      if (text !== 'TRUE' && text !== 'FALSE') throw new Error(where + 'enter TRUE or FALSE.');
+      out[key] = text === 'TRUE';
+    } else {
+      out[key] = String(value).trim();
+    }
+  });
+  return out;
+}
+
+/** Rows to append so every default key exists once; keys the buyer already has are never rewritten. */
+function missingSettingsRows_(rows, defaults, help) {
+  var have = {};
+  (rows || []).forEach(function (row) { have[String(row[0] == null ? '' : row[0]).trim()] = true; });
+  return Object.keys(defaults).filter(function (key) { return !have[key]; }).map(function (key) {
+    var value = defaults[key];
+    return [key, Array.isArray(value) ? value.join(', ') : value, help[key] || ''];
+  });
+}
+
+/** Validates a recipient list and returns MailApp's comma-separated form. */
+function recipients_(list) {
+  if (!list || !list.length) {
+    throw new Error('Fill the "Recipients" row in the Settings tab with at least one email address.');
+  }
+  var bad = list.filter(function (email) { return !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email); });
+  if (bad.length) {
+    throw new Error('Settings tab, row "Recipients": "' + bad[0] + '" is not a valid email address. ' +
+      'Separate addresses with commas.');
+  }
+  return list.join(',');
+}
+
+function sendHour_(hour) {
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    throw new Error('Settings tab, row "Send hour (0-23)": enter a whole number from 0 to 23.');
+  }
+  return hour;
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { salesDay, toCents, buildSummary, renderSummary };
+  module.exports = {
+    salesDay_, toCents_, buildSummary_, renderSummary_, parseSettings_, missingSettingsRows_, recipients_, sendHour_,
+  };
 }
